@@ -61,7 +61,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: url("{{ asset('AutentificaTic/images/bgOLD.png') }}") no-repeat center center fixed;
+            background: url("{{ asset('AutentificaTic/images/fondo.png') }}") no-repeat center center fixed;
             background-size: cover;
             overflow: hidden;
         }
@@ -105,7 +105,7 @@
             axios.post('http://autentificaticapi.carabineros.cl/api/auth/login', {
                 rut: document.getElementById('rut_funcionario').value,
                 password: document.getElementById('clave_intranet').value,
-                website: 'http://pacdilocar.des.carabineros.cl/'
+                website: 'http://pacdilocar.carabineros.cl/'
             }).then(response => {
 
                 access_token = response.data.success.access_token;
@@ -165,7 +165,7 @@
                                     <div class="contenedor-centro">
                                         <h3 class="logo-text mb-3">DIRECCIÓN DE LOGÍSTICA</h3>
                                         <p class="logo-text mb-4">Sistema Plan Anual de Compras</p>
-                                        <img src="{{ asset('AutentificaTic/images/carabineros.png') }}" class="logo"
+                                         <img src="{{ asset('AutentificaTic/images/carabineros.png') }}" class="logo"
                                             height="100px"; width="100px">
 
 

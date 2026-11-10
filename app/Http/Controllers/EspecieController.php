@@ -13,8 +13,17 @@ class EspecieController extends Controller
      */
     public function index()
     {
-        $especies = Especie::all();
-        $departamentos = Departamento::all();
+        $user = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
+
+        $especies = $isAdmin
+            ? Especie::with('departamento')->get()
+            : Especie::with('departamento')->where('departamento_id', $user->departamento_id)->get();
+
+        $departamentos = $isAdmin
+            ? Departamento::all()
+            : Departamento::where('id', $user->departamento_id)->get();
+
         return view('especies.index', compact('especies', 'departamentos'));
     }
 
@@ -23,8 +32,16 @@ class EspecieController extends Controller
      */
     public function create()
     {
-        $departamentos = Departamento::all(); // Fetch departments for the create form
-        $especies = Especie::all(); // <--- ADD THIS LINE to fetch all species
+        $user = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
+
+        $departamentos = $isAdmin
+            ? Departamento::all()
+            : Departamento::where('id', $user->departamento_id)->get();
+
+        $especies = $isAdmin
+            ? Especie::all()
+            : Especie::where('departamento_id', $user->departamento_id)->get();
 
         // Pass both variables to the view
         return view('especies.create', compact('departamentos', 'especies'));
@@ -39,6 +56,13 @@ class EspecieController extends Controller
             'departamento_id' => 'required|exists:departamentos,id',
             'detalle' => 'required',
         ]);
+
+        $user = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
+
+        if (!$isAdmin && (int) $request->departamento_id !== (int) $user->departamento_id) {
+            abort(403, 'No tienes permiso para registrar especies o servicios en otro departamento.');
+        }
 
         $especie = new Especie();
         $especie->departamento_id = $request->departamento_id;
@@ -61,8 +85,15 @@ class EspecieController extends Controller
      */
     public function edit($id)
     {
-        $especies= Especie::findOrFail($id);
-        return view('especies.edit', ['especies'=>$especies]);
+        $especies = Especie::findOrFail($id);
+        $user = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
+
+        if (!$isAdmin && (int) $especies->departamento_id !== (int) $user->departamento_id) {
+            abort(403, 'No tienes permiso para editar este registro.');
+        }
+
+        return view('especies.edit', ['especies' => $especies]);
     }
 
     /**
@@ -75,6 +106,13 @@ class EspecieController extends Controller
         ]);
 
         $especies = Especie::findOrFail($id);
+        $user = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
+
+        if (!$isAdmin && (int) $especies->departamento_id !== (int) $user->departamento_id) {
+            abort(403, 'No tienes permiso para modificar este registro.');
+        }
+
         $especies->detalle = $request->detalle;
         $especies->save();
 
@@ -86,7 +124,15 @@ class EspecieController extends Controller
      */
     public function destroy(Especie $especie, $id)
     {
-        Especie::destroy($id);
+        $especieRegistro = Especie::findOrFail($id);
+        $user = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
+
+        if (!$isAdmin && (int) $especieRegistro->departamento_id !== (int) $user->departamento_id) {
+            abort(403, 'No tienes permiso para eliminar este registro.');
+        }
+
+        $especieRegistro->delete();
         return redirect()->route('especies.index')->with('mensaje', 'Se eliminó el registro del control de Especies/Servicios');
     }
 }

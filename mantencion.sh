@@ -14,7 +14,7 @@ case "$1" in
     echo ""
     echo "✅ Modo mantención ACTIVADO"
     echo "   Usuarios ven la página de mantención."
-    echo "   Tú puedes acceder en: http://pacdilocar.des.carabineros.cl/$SECRET"
+    echo "   Tú puedes acceder en: http://pacdilocar.carabineros.cl/$SECRET"
     echo ""
     ;;
   off)

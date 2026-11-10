@@ -24,27 +24,51 @@
                 <table id="example1" class="table table-striped table-hover table-bordered" style="width: 100%;">
                     <thead style="background-color: #c0c0c0">
                         <tr>
-                            <th style="width: 3%;">N°</th>
-                            <th style="width: 10%">Rut</th>
-                            <th style="width: 25%;">Nombres</th>
-                            <th style="width: 20%;">Email</th>
+                            <th style="width: 3%; text-align: center;">N°</th>
+                            <th style="width: 10%;">Rut</th>
+                            <th style="width: 10%;">Grado</th>
+                            <th style="width: 25%;">Nombres y Apellidos</th>
                             <th style="width: 20%;">Dotación</th>
-                            <th style="width: 12%; text-align:center">Habilitado</th>
-                            <th style="width: 10%; text-align:center">Acción</th>
+                            <th style="width: 14%;">Departamento</th>
+                            <th style="width: 10%; text-align: center;">Habilitado</th>
+                            <th style="width: 8%; text-align: center;">Acción</th>
                         </tr>
                     </thead>
                     <tbody>
-                      <?php
-                      $num=1;
-                      ?>
+                        @php $num = 1; @endphp
                         @foreach($usuarios as $usuario)
+                            @php
+                                $rutNorm = \App\Models\User::normalizarRut($usuario->Rut);
+                                $func = isset($funcionarios) ? $funcionarios->get($rutNorm) : null;
+
+                                $grado = ($func && $func->Grado && $func->Grado !== 'S/G')
+                                    ? $func->Grado
+                                    : ($usuario->Grado ?? 'S/G');
+
+                                $nombresApellidos = ($func && $func->nombre_completo && $func->nombre_completo !== 'Sin Nombre')
+                                    ? $func->nombre_completo
+                                    : $usuario->name;
+
+                                $dotacionApi = ($func && $func->Dotacion && !\App\Models\Funcionario::esDotacionInvalida($func->Dotacion))
+                                    ? $func->Dotacion
+                                    : ($usuario->departamento->detalle ?? ($usuario->Dotacion ?: 'Sin Asignar'));
+                            @endphp
                             <tr>
-                                <td style="text-align: center">{{ $num++ }}</td>
-                                <td>{{ $usuario->Rut }}</td>
-                                <td>{{ $usuario->name }}</td>
-                                <td>{{ $usuario->email }}</td>
-                                <td>{{ $usuario->departamento->detalle}}</td>
-                                <td style="text-align: center">
+                                <td style="text-align: center;">{{ $num++ }}</td>
+                                <td><strong>{{ $usuario->Rut }}</strong></td>
+                                <td>
+                                    <span class="badge badge-secondary" style="font-size: 12px;">
+                                        {{ $grado }}
+                                    </span>
+                                </td>
+                                <td>{{ $nombresApellidos }}</td>
+                                <td>{{ $dotacionApi }}</td>
+                                <td>
+                                    <span class="badge badge-light border" style="font-size: 12px;">
+                                        {{ $usuario->departamento->detalle ?? 'Sin Asignar' }}
+                                    </span>
+                                </td>
+                                <td style="text-align: center;">
                                     <form action="{{ route('admin.usuarios.toggleHabilitado', $usuario->id) }}" method="POST" class="form-habilitado d-inline">
                                         @csrf
                                         @method('PATCH')
@@ -52,23 +76,22 @@
                                         <input type="checkbox" class="chk-habilitado" style="width: 18px; height: 18px;" {{ $usuario->habilitado ? 'checked' : '' }} title="{{ $usuario->habilitado ? 'Habilitado' : 'Inhabilitado' }}">
                                     </form>
                                 </td>
-                                <td style="text-align: center">
-                                    <div class="btn-group" role="group" aria-label="Basic example">
+                                <td style="text-align: center;">
+                                    <div class="btn-group" role="group" aria-label="Acciones">
                                         <a href="{{ url('asignarRol/' . $usuario->id.'/edit') }}" type="button"
-                                            class="btn btn-info btn-sm"><i class="bi bi-eye"></i></a>
-                                        <a href="{{url('admin/usuarios/'.$usuario->id.'/edit')}}" type="button" class="btn btn-success btn-sm"><i class="bi bi-pencil"></i></a>
-                                        <a href="{{url('admin/usuarios/'.$usuario->id.'/confirm-delete')}}" type="button" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></a>
-                                      </div>
+                                            class="btn btn-info btn-sm" title="Ver / Asignar Rol"><i class="bi bi-eye"></i></a>
+                                        <a href="{{url('admin/usuarios/'.$usuario->id.'/edit')}}" type="button" class="btn btn-success btn-sm" title="Editar"><i class="bi bi-pencil"></i></a>
+                                        <a href="{{url('admin/usuarios/'.$usuario->id.'/confirm-delete')}}" type="button" class="btn btn-danger btn-sm" title="Eliminar"><i class="bi bi-trash"></i></a>
+                                    </div>
                                 </td>
-
-                                </tr>
+                            </tr>
                         @endforeach
                     </tbody>
                 </table>
                 <script @cspNonce>
                     $(function() {
                         $("#example1").DataTable({
-                            "pageLength": 5,
+                            "pageLength": 10,
                             "language": {
                                 "emptyTable": "No hay información",
                                 "info": "Mostrando _START_ a _END_ de _TOTAL_ Registros",
@@ -83,7 +106,7 @@
                                 "zeroRecords": "Sin resultados encontrados",
                                 "paginate": {
                                     "first": "Primero",
-                                    "last": "Ultimo",
+                                    "last": "Último",
                                     "next": "Siguiente",
                                     "previous": "Anterior"
                                 }
@@ -92,29 +115,22 @@
                             "lengthChange": true,
                             "autoWidth": false,
                             buttons: [{
-                                    extend: 'collection',
-                                    text: 'Reportes',
-                                    orientation: 'landscape',
-                                    buttons: [{
-                                  //      text: 'Copiar',
-                                  //      extend: 'copy',
-                                  //  }, {
-                                  //      extend: 'pdf'
-                                  //  }, {
-                                  //      extend: 'csv'
-                                   // }, {
-                                        extend: 'excel'
-                                    }, {
-                                        text: 'Imprimir',
-                                        extend: 'print'
-                                    }]
-                                },
-                               // {
-                                 //   extend: 'colvis',
-                                   // text: 'Visor de columnas',
-                                   // collectionLayout: 'fixed three-column'
-                              //  }
-                            ],
+                                extend: 'collection',
+                                text: 'Reportes',
+                                orientation: 'landscape',
+                                buttons: [{
+                                    extend: 'excel',
+                                    exportOptions: {
+                                        columns: [0, 1, 2, 3, 4, 5]
+                                    }
+                                }, {
+                                    text: 'Imprimir',
+                                    extend: 'print',
+                                    exportOptions: {
+                                        columns: [0, 1, 2, 3, 4, 5]
+                                    }
+                                }]
+                            }],
                         }).buttons().container().appendTo('#example1_wrapper .col-md-6:eq(0)');
                     });
 

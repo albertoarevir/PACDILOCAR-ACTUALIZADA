@@ -41,4 +41,9 @@ class Modalidad extends Model
         // La relación `hasMany` ya sabe cómo encontrar las órdenes relacionadas a esta modalidad por 'id_licitacion'.
         return $this->hasMany(Orden::class, 'id_licitacion', 'id');
     }
+
+    public function pagoFacturas()
+    {
+        return $this->hasMany(PagoFactura::class, 'id_licitacion', 'id');
+    }
 }

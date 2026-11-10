@@ -23,7 +23,7 @@ class ReporteDashboardController extends Controller
             $selectedYear = $currentYear;
         }
 
-        // Admin: tiene rol ADMINISTRADOR o pertenece al depto 7 (DirecciÃ³n de LogÃ­stica)
+        // Admin: tiene rol ADMINISTRADOR o pertenece al depto 7 (Dirección de Logística)
         $user    = auth()->user();
         $isAdmin = $user->hasRole('ADMINISTRADOR') || (int)$user->departamento_id === 7;
 
@@ -35,7 +35,7 @@ class ReporteDashboardController extends Controller
             $selectedDepartamentoId = $request->input('departamento_id');
         } else {
             // No-admin: forzar el depto del usuario.
-            // Si no tiene depto asignado, -1 = no matchea nada (dashboard vacÃ­o, no todo abierto).
+            // Si no tiene depto asignado, -1 = no matchea nada (dashboard vací­o, no todo abierto).
             $selectedDepartamentoId = $user->departamento_id ?? -1;
         }
 
@@ -47,13 +47,15 @@ class ReporteDashboardController extends Controller
                 'departamentos.id',
                 'departamentos.detalle as departamento',
                 DB::raw('COALESCE(SUM(presupuestos.monto), 0) as total_presupuesto'),
-                DB::raw('COALESCE((
+                DB::raw("COALESCE((
                     SELECT SUM(o.monto)
                     FROM ordens o
                     INNER JOIN pacs p ON o.id_proyecto = p.id
+                    LEFT JOIN estado_compras ec ON o.estado_id = ec.id
                     WHERE p.departamento_id = departamentos.id
-                      AND p.year = ' . (int)$selectedYear . '
-                ), 0) as total_comprometido')
+                      AND p.year = " . (int)$selectedYear . "
+                      AND COALESCE(LOWER(TRIM(ec.detalle)), '') != 'orden de compra cancelada'
+                ), 0) as total_comprometido")
             )
             ->leftJoin('presupuestos', function ($join) use ($selectedYear) {
                 $join->on('presupuestos.departamento_id', '=', 'departamentos.id')
@@ -139,7 +141,7 @@ class ReporteDashboardController extends Controller
                 $q2->where('departamento_id', $selectedDepartamentoId)))
             ->count();
 
-        // â”€â”€ ALERTAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        //  ALERTAS 
 
         $proyectosSinLicitacion = DB::table('pacs')
             ->leftJoin('modalidads', 'modalidads.id_proyecto', '=', 'pacs.id')
@@ -165,7 +167,13 @@ class ReporteDashboardController extends Controller
                       AND pr.item = pacs.codigo
                 ), 0)
                 <
-                COALESCE((SELECT SUM(o.monto) FROM ordens o WHERE o.id_proyecto = pacs.id), 0)
+                COALESCE((
+                    SELECT SUM(o.monto)
+                    FROM ordens o
+                    LEFT JOIN estado_compras ec ON o.estado_id = ec.id
+                    WHERE o.id_proyecto = pacs.id
+                      AND COALESCE(LOWER(TRIM(ec.detalle)), \'\') != \'orden de compra cancelada\'
+                ), 0)
             ')
             ->when($selectedDepartamentoId, fn($q) => $q->where('departamento_id', $selectedDepartamentoId))
             ->count();
@@ -180,7 +188,7 @@ class ReporteDashboardController extends Controller
             ->when($selectedDepartamentoId, fn($q) => $q->where('pacs.departamento_id', $selectedDepartamentoId))
             ->count();
 
-        // â”€â”€ MOTOR DE DETECCIÃ“N DE FRAGMENTACIÃ“N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // MOTOR DE DETECCIÓN DE FRAGMENTACIÓN
 
         // Reglas configurables del motor (parametrizables)
         $reglasFragmentacion = [
@@ -241,7 +249,7 @@ class ReporteDashboardController extends Controller
 
             $score = 0;
 
-            // DimensiÃ³n 1 â€” Frecuencia de OC (peso 35 pts)
+            // Dimensión 1 Frecuencia de OC (peso 35 pts)
             $score += match(true) {
                 $item->cantidad_oc >= 10 => 35,
                 $item->cantidad_oc >= 7  => 28,
@@ -250,7 +258,7 @@ class ReporteDashboardController extends Controller
                 default                  => 5,
             };
 
-            // DimensiÃ³n 2 â€” Monto relativo al umbral 100 UTM (peso 35 pts)
+            // Dimensión 2 Monto relativo al umbral 100 UTM (peso 35 pts)
             $ratio = $umbralFragmentacion > 0 ? $item->monto_total / $umbralFragmentacion : 0;
             $score += match(true) {
                 $ratio >= 3.0 => 35,
@@ -260,7 +268,7 @@ class ReporteDashboardController extends Controller
                 default       => 3,
             };
 
-            // DimensiÃ³n 3 â€” Temporalidad (peso 20 pts, menor dispersiÃ³n = mayor riesgo)
+            // Dimensión 3 Temporalidad (peso 20 pts, menor dispersión = mayor riesgo)
             $score += match(true) {
                 $item->dispersion_dias <= 7  => 20,
                 $item->dispersion_dias <= 15 => 17,
@@ -270,13 +278,13 @@ class ReporteDashboardController extends Controller
                 default                      => 0,
             };
 
-            // DimensiÃ³n 4 â€” Modalidad de menor cuantÃ­a (peso 10 pts)
+            // Dimensión Modalidad de menor cuantí­a (peso 10 pts)
             $item->modalidad_baja = (bool)preg_match('/trato directo|compra.?agil|compra directa/i', $item->modalidad);
             $score += $item->modalidad_baja ? 10 : 0;
 
             $item->score_riesgo = min(100, $score);
 
-            // ClasificaciÃ³n por reglas parametrizables
+            // Clasificación por reglas parametrizables
             $r = $reglasFragmentacion;
             $esAlto = $item->cantidad_oc    >= $r['alto']['cantidad_oc']
                    && $item->dispersion_dias <= $r['alto']['dispersion_dias']
@@ -292,13 +300,13 @@ class ReporteDashboardController extends Controller
             return $item;
         })->sortByDesc('score_riesgo')->values();
 
-        // â”€â”€ KPIs del mÃ³dulo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // KPIs del módulo
         $kpiTotalOC          = $casosFrag->sum('cantidad_oc');
         $kpiCasosSospechosos = $casosFrag->whereIn('nivel_riesgo', ['ALTO', 'MEDIO'])->count();
         $kpiRiesgoAlto       = $casosFrag->where('nivel_riesgo', 'ALTO')->count();
         $kpiMontoFragmentado = $casosFrag->whereIn('nivel_riesgo', ['ALTO', 'MEDIO'])->sum('monto_total');
 
-        // â”€â”€ Chart: Top 10 especies por score â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Chart: Top 10 especies por score
         $chartEspeciesRiesgo = $casosFrag
             ->groupBy('especie')
             ->map(fn($g, $k) => (object)[
@@ -317,7 +325,7 @@ class ReporteDashboardController extends Controller
         $chartEspecieMontos  = $chartEspeciesRiesgo->pluck('monto')->toArray();
         $chartEspecieNiveles = $chartEspeciesRiesgo->pluck('nivel')->toArray();
 
-        // â”€â”€ Chart: Riesgo por departamento (stacked) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Chart: Riesgo por departamento
         $chartRiesgoDept = $casosFrag
             ->groupBy('departamento')
             ->map(fn($g, $k) => (object)[
@@ -335,7 +343,7 @@ class ReporteDashboardController extends Controller
         $chartDeptMedio  = $chartRiesgoDept->pluck('medio')->toArray();
         $chartDeptBajo   = $chartRiesgoDept->pluck('bajo')->toArray();
 
-        // â”€â”€ Chart: EvoluciÃ³n temporal mensual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Chart: Evolución temporal mensual
         $evolucionMeses = $casosFrag
             ->filter(fn($r) => $r->mes_inicio > 0)
             ->groupBy('mes_inicio')
@@ -351,7 +359,7 @@ class ReporteDashboardController extends Controller
             $chartEvolucionMontos[] = $d ? (float)$d['monto']  : 0;
         }
 
-        // â”€â”€ Chart: Modalidades en casos sospechosos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        //Chart: Modalidades en casos sospechosos
         $chartModalidadFrag = $casosFrag
             ->whereIn('nivel_riesgo', ['ALTO', 'MEDIO'])
             ->groupBy('modalidad')
@@ -362,7 +370,7 @@ class ReporteDashboardController extends Controller
         $chartFragModLabels = $chartModalidadFrag->pluck('modalidad')->toArray();
         $chartFragModData   = $chartModalidadFrag->pluck('casos')->toArray();
 
-        // â”€â”€ Heatmap: Especie Ã— Departamento â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Heatmap: Especie — Departamento
         $heatmapEspecies = $casosFrag->pluck('especie')->unique()->take(8)->values()->toArray();
         $heatmapDeptos   = $casosFrag->pluck('departamento')->unique()->take(8)->values()->toArray();
         $heatmapMatrix   = [];
@@ -396,7 +404,7 @@ class ReporteDashboardController extends Controller
         $chartFragEspecieOCs    = $fragmentacionPorEspecie->map(fn($r) => (int)$r->num_ordenes)->toArray();
         $chartFragEspecieMontos = $fragmentacionPorEspecie->map(fn($r) => (float)$r->monto_total)->toArray();
 
-        // â”€â”€ MODALIDAD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // MODALIDAD
 
         $distribucionModalidad = DB::table('modalidads')
             ->select([
@@ -420,7 +428,7 @@ class ReporteDashboardController extends Controller
         $chartModalidadLabels = $distribucionModalidad->pluck('modalidad')->toArray();
         $chartModalidadData   = $distribucionModalidad->map(fn($r) => (float)$r->monto_total)->toArray();
 
-        // â”€â”€ CONCENTRACIÃ“N TEMPORAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // CONCENTRACIÓN TEMPORAL
 
         $concentracionRaw = DB::table('ordens')
             ->select([
@@ -447,7 +455,7 @@ class ReporteDashboardController extends Controller
             $chartTemporalMontos[] = $dato ? (float)$dato->monto_total : 0;
         }
 
-        // â”€â”€ TOP PROYECTOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // TOP PROYECTOS
 
         $todosProyectos = DB::table('pacs')
             ->select([
@@ -461,7 +469,13 @@ class ReporteDashboardController extends Controller
                       AND pr.year = pacs.year
                       AND pr.item = pacs.codigo
                 ), 0) as presupuesto'),
-                DB::raw('COALESCE((SELECT SUM(o.monto) FROM ordens o WHERE o.id_proyecto = pacs.id), 0) as comprometido'),
+                DB::raw("COALESCE((
+                    SELECT SUM(o.monto)
+                    FROM ordens o
+                    LEFT JOIN estado_compras ec ON o.estado_id = ec.id
+                    WHERE o.id_proyecto = pacs.id
+                      AND COALESCE(LOWER(TRIM(ec.detalle)), '') != 'orden de compra cancelada'
+                ), 0) as comprometido"),
             ])
             ->join('departamentos', 'pacs.departamento_id', '=', 'departamentos.id')
             ->leftJoin('especies', 'pacs.especie_id', '=', 'especies.id')
@@ -491,7 +505,7 @@ class ReporteDashboardController extends Controller
             ->take(10)
             ->values();
 
-        // â”€â”€ DETALLE ALERTAS (para modales "Ver MÃ¡s") â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // DETALLE ALERTAS (para modales "Ver Más")
         $detalleSinLicitacion = DB::table('pacs')
             ->select(
                 'pacs.id as id_proyecto',
@@ -557,7 +571,7 @@ class ReporteDashboardController extends Controller
             ->orderBy('departamentos.detalle')
             ->get();
 
-        // Panel de estado de usuarios â€” solo visible para admin en la vista
+        // Panel de estado de usuarios solo visible para admin en la vista
         $resumenUsuarios = $isAdmin
             ? DB::table('users')
                 ->leftJoin('departamentos', 'users.departamento_id', '=', 'departamentos.id')

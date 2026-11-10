@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 return [
 
@@ -32,8 +32,12 @@ return [
     ],
 
     'autentificatic' => [
-        'url'  => env('AUTENTIFICATIC_API_URL', 'http://autentificaticapi.carabineros.cl/api/auth/validate-token'),
-        'host' => env('AUTENTIFICATIC_API_HOST', 'autentificaticapi.carabineros.cl'),
+        'url'             => env('AUTENTIFICATIC_API_URL', 'http://autentificaticapi.carabineros.cl/api/auth/validate-token'),
+        'host'            => env('AUTENTIFICATIC_API_HOST', 'autentificaticapi.carabineros.cl'),
+        'register_url'    => env('AUTENTIFICATIC_REGISTER_URL', 'http://autentificaticapi.carabineros.cl/api/institutional-app-user-from-external-app'),
+        'platform_url'    => env('AUTENTIFICATIC_PLATFORM_URL', 'http://pacdilocar.carabineros.cl/'),
+        'platform_domain' => env('AUTENTIFICATIC_PLATFORM_DOMAIN', 'pacdilocar.carabineros.cl'),
+        'user_data_url'   => env('AUTENTIFICATIC_USER_DATA_URL', 'http://autentificaticapi.carabineros.cl/api/user-data'),
     ],
 
 ];

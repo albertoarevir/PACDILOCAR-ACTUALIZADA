@@ -17,7 +17,7 @@ class ReporteController extends Controller
     public function index(Request $request)
     {
         $user    = auth()->user();
-        $isAdmin = $user->departamento_id === 7;
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
         $currentYear    = now()->year;
         $availableYears = range($currentYear, $currentYear - 4);
         $selectedYear   = $request->input('year', $currentYear);
@@ -55,7 +55,7 @@ class ReporteController extends Controller
                       AND pr.year            = pacs.year
                       AND pr.item            = pacs.codigo
                 ), 0) as presupuesto_inicial_sap'),
-                DB::raw('COALESCE((
+                DB::raw("COALESCE((
                     SELECT SUM(pr2.monto)
                     FROM presupuestos pr2
                     WHERE pr2.departamento_id = pacs.departamento_id
@@ -64,21 +64,25 @@ class ReporteController extends Controller
                 ), 0) - COALESCE((
                     SELECT SUM(o2.monto)
                     FROM ordens o2
+                    LEFT JOIN estado_compras ec2 ON o2.estado_id = ec2.id
                     WHERE o2.id_proyecto = pacs.id
-                ), 0) as saldo'),
+                      AND COALESCE(LOWER(TRIM(ec2.detalle)), '') != 'orden de compra cancelada'
+                ), 0) as saldo"),
                 'ordens.monto                       as monto_compra',
                 'ordens.numero                      as numero_orden',
-                'ordens.fecha_seguimiento           as fecha_actualizacion_compra',
+                'ordens.updated_at           as fecha_actualizacion_compra',
                 'estado_compras.detalle             as estado_compra',
                 'modalidads.numero                  as numero_licitacion',
                 'modalidads.modalidad               as modalidad_compra',
                 'modalidads.updated_at              as fecha_actualizacion_licitacion',
                 'estado_licitacions.detalle         as estado_licitacion',
-                DB::raw('(
+                DB::raw("(
                     SELECT COALESCE(SUM(o2.monto), 0)
                     FROM ordens o2
+                    LEFT JOIN estado_compras ec2 ON o2.estado_id = ec2.id
                     WHERE o2.id_proyecto = pacs.id
-                ) as comprometido'),
+                      AND COALESCE(LOWER(TRIM(ec2.detalle)), '') != 'orden de compra cancelada'
+                ) as comprometido"),
             ])
             ->join('departamentos', 'pacs.departamento_id', '=', 'departamentos.id')
            ->leftJoin('especies', 'pacs.especie_id', '=', 'especies.id')

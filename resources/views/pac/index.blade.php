@@ -117,16 +117,10 @@
                             ?>
                             @foreach ($pacs->sortByDesc('id') as $pac)
                                 @php
-                                    $monto_total = 0;
-                                    $total_ordenes = 0;
-                                    foreach ($pac->modalidades as $modalidad) {
-                                        $ordenes = Orden::where('id_licitacion', $modalidad->id)->get();
-                                        $total_ordenes += $ordenes->count();
-                                        foreach ($ordenes as $orden) {
-                                            $monto = str_replace('.', '', str_replace(',', '', $orden->monto));
-                                            $monto_total += (float) $monto;
-                                        }
-                                    }
+                                    $monto_total = (float) $pac->ordenes
+                                        ->filter(fn($o) => strtolower(trim($o->estadocompra->detalle ?? '')) !== 'orden de compra cancelada')
+                                        ->sum('monto');
+                                    $total_ordenes = $pac->ordenes->count();
                                     $pac->monto_total = $monto_total;
                                 @endphp
                                 <tr>
@@ -309,13 +303,8 @@
                                     {{--  <td>{{ $pac->updated_at }}</td> --}}
                                     <!-- <td>{!! $pac->auditoria !!}</td>--><!-- Mostrar el mensaje de auditoría -->
 
-
-
-
                                     <td style="text-align: center">
                                         <div class="btn-group float-right" role="group" aria-label="Basic example">
-
-
 
                                             @can('INGRESAR LICITACION')
                                                 @if ($pac->estado->detalle == 'Aprobado Dilocar')
@@ -326,17 +315,12 @@
                                                 @endif
                                             @endcan
 
-
-
                                             @can('MODIFICAR PROYECTO')
                                                 <a href="{{ url('pac/' . $pac->id . '/edit') }}" type="button"
                                                     class="btn btn-success btn-sm" title="Editar registro"><i
                                                         class="bi bi-pencil"></i>
                                                 </a>
                                             @endcan
-
-
-
 
                                             @can('ELIMINAR PROYECTO')
                                                 <form action="{{ url('pac', $pac->id) }}" method="post"
@@ -358,6 +342,7 @@
                     </table>
 
                     {{-- MODAL 1 - > llamada de target = licitacioModal - Este codigo corresponde al modal que abre desde el index principal de registro de formulario de seguimiento de licitaciones de compra --}}
+                   
                     @foreach ($pacs->sortByDesc('id') as $pac)
                         @if (auth()->user()->departamento_id == 7 || $pac->departamento->id == auth()->user()->departamento_id)
                             @php

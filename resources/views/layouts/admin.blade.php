@@ -25,7 +25,22 @@
     <link rel="stylesheet" href="{{ url('plugins/datatables-responsive/css/responsive.bootstrap4.min.css') }}">
     <link rel="stylesheet" href="{{ url('plugins/datatables-buttons/css/buttons.bootstrap4.min.css') }}">
 
-
+    <style @cspNonce>
+        .wrapper {
+            min-height: 100vh !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+        .content-wrapper {
+            flex: 1 0 auto !important;
+            height: auto !important;
+            min-height: calc(100vh - 7.5rem) !important;
+            padding-bottom: 1.5rem;
+        }
+        .main-footer {
+            flex-shrink: 0;
+        }
+    </style>
 
     @stack('styles')
 </head>
@@ -112,7 +127,7 @@
                         <a href="#" class="d-block" style="font-size: 14px; color:aliceblue; margin-bottom: 0;">
                             {{ session('nombre_completo', Auth::user()->name) }}</a>
                         <a href="#" class="d-block" style="font-size: 14px; color:aliceblue; margin-bottom: 0;">
-                            {{ session('dotacion', Auth::user()->departamento->detalle) }}</a>
+                            {{ session('dotacion', optional(Auth::user()->departamento)->detalle) }}</a>
                     </div>
                 </div>
 
@@ -193,16 +208,21 @@
                                 </a>
                                 <ul class="nav nav-treeview">
                                     <li class="nav-item">
-
                                         <a href="{{ route('registerUser.form') }}" class="nav-link active">
                                             <i class="far fa-circle nav-icon"></i>
                                             <p>Ingresar personal</p>
                                         </a>
                                     </li>
                                     <li class="nav-item">
+                                        <a href="{{ route('autenti.funcionarios') }}" class="nav-link active">
+                                            <i class="far fa-circle nav-icon"></i>
+                                            <p>Funcionarios Autentificatic</p>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
                                         <a href="{{ url('admin/usuarios') }}" class="nav-link active">
                                             <i class="far fa-circle nav-icon"></i>
-                                            <p>Listados de personal</p>
+                                            <p>Usuarios del sistema PAC</p>
                                         </a>
                                     </li>
                                 </ul>
@@ -336,6 +356,11 @@
                             </li>
                         @endcan
 
+
+
+
+
+                        
                         @can('MENU PRESUPUESTO')
                             <li class="nav-item" style="font-size: 14px; color:aliceblue; margin-bottom: 0;">
                                 <a href="#" class="nav-link active">
@@ -357,7 +382,7 @@
                         @endcan
 
 
-                        @can('MENU CONFIGURACION')
+                        @canany(['MENU CONFIGURACION', 'GRADOS DEL PERSONAL', 'DEPARTAMENTOS', 'ESPECIES O SERVICIOS', 'CLASIFICADOR', 'DESCRIPCION CLASIFICADOR', 'UNIDAD DE COMPRAS', 'ESTADO DEL REGISTRO', 'MODALIDAD DE COMPRA', 'ESTADO DE LICITACION', 'ESTADO DE COMPRAS', 'FUENTE DE FINANCIAMIENTO'])
                             <li class="nav-item" style="font-size: 14px; color:aliceblue; margin-bottom: 0;">
                                 <a href="#" class="nav-link active">
                                     <i class="nav-icon fas bi bi-gear"></i>
@@ -367,89 +392,107 @@
                                     </p>
                                 </a>
                                 <ul class="nav nav-treeview">
-                                    <li class="nav-item">
-                                        <a href="{{ url('grados/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Grados del personal</p>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('departamentos/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Departamentos</p>
-                                        </a>
-                                    </li>
+                                    @can('GRADOS DEL PERSONAL')
+                                        <li class="nav-item">
+                                            <a href="{{ url('grados/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Grados del personal</p>
+                                            </a>
+                                        </li>
+                                    @endcan
 
-                       
-                                    <li class="nav-item">
-                                        <a href="{{ url('especies/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Especies o Servicios</p>
-                                        </a>
-                                    </li>
-                        
-                                
-                       
-                                    <li class="nav-item">
-                                        <a href="{{ url('clasificador/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Clasificador</p>
-                                        </a>
-                                    </li>
+                                    @can('DEPARTAMENTOS')
+                                        <li class="nav-item">
+                                            <a href="{{ url('departamentos/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Departamentos</p>
+                                            </a>
+                                        </li>
+                                    @endcan
 
+                                    @can('ESPECIES O SERVICIOS')
+                                        <li class="nav-item">
+                                            <a href="{{ url('especies/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Especies o Servicios</p>
+                                            </a>
+                                        </li>
+                                    @endcan
 
-                                    <li class="nav-item">
-                                        <a href="{{ url('codigos/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Descripcion/clasificador</p>
-                                        </a>
-                                    </li>
+                                    @can('CLASIFICADOR')
+                                        <li class="nav-item">
+                                            <a href="{{ url('clasificador/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Clasificador</p>
+                                            </a>
+                                        </li>
+                                    @endcan
 
-                                    <li class="nav-item">
-                                        <a href="{{ url('unidadcompra/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Unidad de Compras</p>
-                                        </a>
-                                    </li>
+                                    @can('DESCRIPCION CLASIFICADOR')
+                                        <li class="nav-item">
+                                            <a href="{{ url('codigos/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Descripcion/clasificador</p>
+                                            </a>
+                                        </li>
+                                    @endcan
 
+                                    @can('UNIDAD DE COMPRAS')
+                                        <li class="nav-item">
+                                            <a href="{{ url('unidadcompra/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Unidad de Compras</p>
+                                            </a>
+                                        </li>
+                                    @endcan
 
-                                    <li class="nav-item">
-                                        <a href="{{ url('estados/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Estado del Registro</p>
-                                        </a>
-                                    </li>
+                                    @can('ESTADO DEL REGISTRO')
+                                        <li class="nav-item">
+                                            <a href="{{ url('estados/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Estado del Registro</p>
+                                            </a>
+                                        </li>
+                                    @endcan
 
-                                    <li class="nav-item">
-                                        <a href="{{ url('tipodecompra/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Modalidad de Compra</p>
-                                        </a>
-                                    </li>
+                                    @can('MODALIDAD DE COMPRA')
+                                        <li class="nav-item">
+                                            <a href="{{ url('tipodecompra/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Modalidad de Compra</p>
+                                            </a>
+                                        </li>
+                                    @endcan
 
-                                    <li class="nav-item">
-                                        <a href="{{ url('estadolicitacion/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Estado de Licitación</p>
-                                        </a>
-                                    </li>
+                                    @can('ESTADO DE LICITACION')
+                                        <li class="nav-item">
+                                            <a href="{{ url('estadolicitacion/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Estado de Licitación</p>
+                                            </a>
+                                        </li>
+                                    @endcan
 
-                                    <li class="nav-item">
-                                        <a href="{{ url('estadocompras/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Estado de Compras</p>
-                                        </a>
-                                    </li>
+                                    @can('ESTADO DE COMPRAS')
+                                        <li class="nav-item">
+                                            <a href="{{ url('estadocompras/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Estado de Compras</p>
+                                            </a>
+                                        </li>
+                                    @endcan
 
-                                    <li class="nav-item">
-                                        <a href="{{ url('fuentefinanciamiento/') }}" class="nav-link active">
-                                            <i class="far fa-circle nav-icon"></i>
-                                            <p>Fuente de Financiamiento</p>
-                                        </a>
-                                    </li>
+                                    @can('FUENTE DE FINANCIAMIENTO')
+                                        <li class="nav-item">
+                                            <a href="{{ url('fuentefinanciamiento/') }}" class="nav-link active">
+                                                <i class="far fa-circle nav-icon"></i>
+                                                <p>Fuente de Financiamiento</p>
+                                            </a>
+                                        </li>
+                                    @endcan
                                 </ul>
                             </li>
-                        @endcan
+                        @endcanany
 
                         {{-- Menú Dashboard --}}
                         @can('MENU DASHBOARD')

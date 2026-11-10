@@ -25,12 +25,12 @@ class ApiLoginController extends Controller
             'accessToken'     => 'required|string',
         ]);
 
-        $rut   = $request->input('rut_funcionario');
+        $rut   = User::normalizarRut($request->input('rut_funcionario'));
         $token = $request->input('accessToken');
         $ip    = $request->ip();
 
         try {
-            // RIESGO: API sin HTTPS. Solicitar a TIC habilitar TLS en autentificaticapi.carabineros.cl
+            // 
             $response = Http::timeout(10)->withHeaders([
                 'Authorization' => 'Bearer ' . $token,
                 'Accept'        => 'application/json',
@@ -50,12 +50,15 @@ class ApiLoginController extends Controller
         }
 
         try {
+            // Comparar el RUT normalizado en ambos lados: en la BD pueden existir RUT guardados con puntos o guion
+            $rutSql = "UPPER(REGEXP_REPLACE(\"Rut\", '[^0-9Kk]', '', 'g')) = ?";
+
             // Primero buscar usuario activo (no eliminado)
-            $user = User::where('Rut', $rut)->first();
+            $user = User::whereRaw($rutSql, [$rut])->first();
 
             // Si no hay usuario activo, buscar soft-deleted y restaurarlo
             if (!$user) {
-                $userTrashed = User::onlyTrashed()->where('Rut', $rut)->first();
+                $userTrashed = User::onlyTrashed()->whereRaw($rutSql, [$rut])->first();
 
                 if ($userTrashed) {
                     $userTrashed->restore();
@@ -99,6 +102,9 @@ class ApiLoginController extends Controller
             Auth::login($user);
             $request->session()->regenerate();
 
+            // Token institucional en la sesion del servidor, para llamadas posteriores a AutentificaTic (ej: habilitar usuarios)
+            $request->session()->put('autentificatic_token', $token);
+
             // Obtener nombre completo, dotacion y foto desde la API
             try {
                 $userApi = Http::timeout(5)
@@ -134,12 +140,25 @@ class ApiLoginController extends Controller
                                 : 'data:image/jpeg;base64,' . $rawPhoto;
                         }
 
+                        $dotacionApi = $u['descripcion_reparticion']
+                            ?? ($u['dotacion']
+                            ?? 'DIRECCION DE LOGISTICA');
+
                         session([
-                            'nombre_completo' => $nombreCompleto,
-                            'dotacion'        => $u['dotacion'] ?? null,
-                            'grado'           => $u['grado'] ?? null,
-                            'foto_perfil'     => $fotoPerfil,
+                            'nombre_completo'         => $nombreCompleto,
+                            'dotacion'                => $dotacionApi,
+                            'descripcion_reparticion' => $dotacionApi,
+                            'grado'                   => $u['grado'] ?? null,
+                            'foto_perfil'             => $fotoPerfil,
                         ]);
+
+                        // Persistir la dotacion oficial extraida de la API institucional en la tabla funcionarios
+                        try {
+                            \App\Models\Funcionario::where('Rut', $rut)
+                                ->update(['Dotacion' => $dotacionApi]);
+                        } catch (\Exception $exFunc) {
+                            // no interrumpir login
+                        }
                     }
                 }
             } catch (\Exception $e) {

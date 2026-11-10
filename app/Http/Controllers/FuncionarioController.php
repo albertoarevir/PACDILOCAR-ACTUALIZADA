@@ -120,9 +120,16 @@ class FuncionarioController extends Controller
 
     public function destroy($id)
     {
-        Funcionario::destroy($id);
+        $funcionario = Funcionario::find($id);
+        if ($funcionario) {
+            $rutNorm = \App\Models\User::normalizarRut($funcionario->Rut);
+            $token = session('autentificatic_token') ?: request()->cookie('token_de_acceso');
+            \App\Http\Controllers\Autenti\AutentiController::eliminarUsuarioEnApi($rutNorm, $token);
+            $funcionario->delete();
+        }
+
         return redirect()->route('funcionarios.index')
-            ->with('mensaje', 'Se eliminó el usuario de la manera correcta')
+            ->with('mensaje', 'Se eliminó el funcionario de la manera correcta y se desvinculó de AutentificaTic')
             ->with('icono', 'success');
     }
 }

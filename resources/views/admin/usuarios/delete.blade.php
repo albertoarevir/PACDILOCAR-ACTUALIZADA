@@ -11,8 +11,11 @@
                     <h3 class="card-title">¿Esta seguro de eliminar este registro?</h3>
 
                 </div>
-                
                 <div class="card-body">
+                    <div class="alert alert-warning" style="font-size: 13px;">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Al confirmar la eliminación de este usuario en PAC, también será <strong>eliminado y desvinculado automáticamente de Autentificatic API</strong> para mantener la consistencia institucional.
+                    </div>
                     <form action="{{url('/admin/usuarios', $usuario->id)}}" method="post">
                         @csrf
                         @method('DELETE')

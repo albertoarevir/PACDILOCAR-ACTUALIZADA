@@ -79,7 +79,11 @@ class DashboardController extends Controller
 
         // --- Preparar las consultas base y aplicar filtros ---
         $presupuestoBaseQuery = Presupuesto::where('year', $currentYear);
-        $ordenBaseQuery = Orden::whereYear('fecha_seguimiento', $currentYear);
+        $ordenBaseQuery = Orden::whereHas('pac', function ($q) use ($currentYear) {
+            $q->where('year', $currentYear);
+        })->whereDoesntHave('estadocompra', function ($q) {
+            $q->whereRaw("LOWER(TRIM(detalle)) = 'orden de compra cancelada'");
+        });
         $modalidadBaseQuery = Modalidad::whereHas('pac', function ($q) use ($currentYear) {
             $q->where('year', $currentYear);
         });
@@ -130,7 +134,9 @@ class DashboardController extends Controller
         // CORRECCIÓN: Usar getQualifiedForeignKeyName() para el join robusto
         $ordenData = Orden::select('pacs.departamento_id', DB::raw('SUM(ordens.monto) as total_comprometido'))
             ->join('pacs', (new Orden)->pac()->getQualifiedForeignKeyName(), '=', 'pacs.id')
-            ->whereYear('fecha_seguimiento', $currentYear);
+            ->leftJoin('estado_compras', 'ordens.estado_id', '=', 'estado_compras.id')
+            ->where('pacs.year', $currentYear)
+            ->whereRaw("COALESCE(LOWER(TRIM(estado_compras.detalle)), '') != 'orden de compra cancelada'");
 
         if ($selectedDepartamentoId) {
             $pacData->where('departamento_id', $selectedDepartamentoId);
@@ -172,27 +178,36 @@ class DashboardController extends Controller
         }
 
         foreach ($departamentosLoop as $depto) {
-    // Presupuesto del departamento para el año seleccionado
-    $presupuestoMonto = Presupuesto::where('departamento_id', $depto->id)
-        ->where('year', $selectedYear)
-        ->sum('monto');
+            // Presupuesto del departamento para el año seleccionado
+            $presupuestoMonto = Presupuesto::where('departamento_id', $depto->id)
+                ->where('year', (int) $selectedYear)
+                ->sum('monto');
 
-    // Comprometido: suma del monto de las órdenes asociadas al departamento, para el año seleccionado
-    $comprometido = Orden::whereYear('fecha_seguimiento', $selectedYear)
-        ->whereHas('pac', function ($q) use ($depto) {
-            $q->where('departamento_id', $depto->id);
-        })
-        ->sum('monto');
+            // Comprometido: idéntico al cálculo de ReporteDashboardController ($dato['comprometido']), excluyendo Orden de Compra Cancelada
+            $comprometido = DB::table('ordens')
+                ->join('pacs', 'ordens.id_proyecto', '=', 'pacs.id')
+                ->leftJoin('estado_compras', 'ordens.estado_id', '=', 'estado_compras.id')
+                ->where('pacs.departamento_id', $depto->id)
+                ->where('pacs.year', (int) $selectedYear)
+                ->whereRaw("COALESCE(LOWER(TRIM(estado_compras.detalle)), '') != 'orden de compra cancelada'")
+                ->sum('ordens.monto');
 
-    $porcentaje = $presupuestoMonto > 0 ? ($comprometido / $presupuestoMonto) * 100 : 0;
+            $porcentaje = $presupuestoMonto > 0 ? ($comprometido / $presupuestoMonto) * 100 : 0;
 
-    $datos_departamentos[] = [
-        'departamento' => $depto,
-        'presupuesto'  => (float) $presupuestoMonto,
-        'comprometido' => (float) $comprometido,
-        'porcentaje'   => round($porcentaje, 2),
-    ];
-}
+            $datos_departamentos[] = [
+                'departamento' => $depto,
+                'presupuesto'  => (float) $presupuestoMonto,
+                'comprometido' => (float) $comprometido,
+                'porcentaje'   => round($porcentaje, 2),
+            ];
+        }
+
+        // Unificar métricas generales con el total de $datos_departamentos (igual que en reporte/dashboard.blade.php)
+        $total_presupuesto_general = collect($datos_departamentos)->sum('presupuesto');
+        $total_comprometido_general = collect($datos_departamentos)->sum('comprometido');
+        $total_porcentaje_ejecucion_general = $total_presupuesto_general > 0
+            ? round(($total_comprometido_general / $total_presupuesto_general) * 100, 2)
+            : 0;
 
         // --- Gráfico de Dona: Estados de Compras ---
         $estadosCompras = Orden::query()

@@ -23,7 +23,7 @@ class User extends Authenticatable
         'Rut',
         'name',
         'email',
-        'Dotacion',
+        'departamento_id',
         'password',
         'habilitado',
     ];
@@ -48,16 +48,52 @@ class User extends Authenticatable
         'habilitado'        => 'boolean',
     ];
 
-  /*  protected static function booted()
-{
-    static::created(function ($user) {
-        $user->roles()->attach(Role::where('name', 'USUARIO_BASICO')->first()->id);
-    });
-}
-    */
+    /**
+     * Deja el RUT sin puntos, guion ni espacios y con la K en mayuscula (ej: 15.955.820-k -> 15955820K).
+     */
+    public static function normalizarRut(?string $rut): string
+    {
+        return strtoupper(preg_replace('/[^0-9kK]/', '', (string) $rut));
+    }
 
-public function departamento()
-{
-    return $this->belongsTo(Departamento::class);
-}
+    public function setRutAttribute($value): void
+    {
+        $this->attributes['Rut'] = self::normalizarRut($value);
+    }
+
+    public function departamento()
+    {
+        return $this->belongsTo(Departamento::class);
+    }
+
+    public function funcionario()
+    {
+        return $this->hasOne(Funcionario::class, 'Rut', 'Rut');
+    }
+
+    public function getGradoAttribute(): string
+    {
+        return $this->funcionario?->Grado ?? $this->attributes['Grado'] ?? 'S/G';
+    }
+
+    public function getCodigoAttribute(): string
+    {
+        return $this->funcionario?->Codigo ?? $this->attributes['Codigo'] ?? 'S/C';
+    }
+
+    public function getDotacionAttribute(): string
+    {
+        $dot = $this->funcionario?->Dotacion;
+        if (Funcionario::esDotacionInvalida($dot)) {
+            $depDetalle = $this->departamento?->detalle;
+            if (!empty($depDetalle) && !Funcionario::esDotacionInvalida($depDetalle)) {
+                return $depDetalle;
+            }
+            if (auth()->check() && User::normalizarRut(auth()->user()->Rut) === User::normalizarRut($this->Rut)) {
+                return session('descripcion_reparticion') ?: (session('dotacion') ?: 'DIRECCION DE LOGISTICA');
+            }
+            return 'Pendiente (se actualiza al iniciar sesión)';
+        }
+        return $dot;
+    }
 }

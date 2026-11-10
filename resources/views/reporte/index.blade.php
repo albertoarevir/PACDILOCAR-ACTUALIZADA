@@ -254,10 +254,22 @@
             overflow-x: auto;
         }
 
-        /* Evita que el calculo JS de AdminLTE (min-height/height dinamico) deje al content-wrapper mas bajo que la tabla real, tapando el footer */
+        /* Evita que el calculo JS de AdminLTE deje al content-wrapper mas bajo que la tabla o flotando a mitad de pantalla */
+        .wrapper {
+            min-height: 100vh !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+
         .content-wrapper {
+            flex: 1 0 auto !important;
             height: auto !important;
-            min-height: auto !important;
+            min-height: calc(100vh - 7.5rem) !important;
+            padding-bottom: 1.5rem !important;
+        }
+
+        .main-footer {
+            flex-shrink: 0;
         }
     </style>
 

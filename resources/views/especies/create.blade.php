@@ -25,9 +25,11 @@
                             <div class="form-group">
                                 <label for="departamento_id">Departamento</label>
                                 <select name="departamento_id" id="departamento_id" class="form-control @error('departamento_id') is-invalid @enderror" required>
-                                    <option value="">Seleccione un departamento</option>
+                                    @if ($departamentos->count() > 1)
+                                        <option value="">Seleccione un departamento</option>
+                                    @endif
                                     @foreach ($departamentos as $departamento)
-                                        <option value="{{ $departamento->id }}" {{ old('departamento_id') == $departamento->id ? 'selected' : '' }}>
+                                        <option value="{{ $departamento->id }}" {{ (old('departamento_id') == $departamento->id || $departamentos->count() === 1) ? 'selected' : '' }}>
                                             {{ $departamento->detalle }}
                                         </option>
                                     @endforeach

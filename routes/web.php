@@ -11,28 +11,29 @@ use App\Http\Controllers\PresupuestoController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ReporteDashboardController;
 
-// â”€â”€â”€ PÃ¡gina raÃ­z â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 Route::get('/', function () {
     return redirect()->route('login.custom');
 });
 
-// â”€â”€â”€ AutenticaciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 Route::get('/', [ApiLoginController::class, 'showLoginForm'])->name('login.custom');
 Route::post('/login-api-process', [ApiLoginController::class, 'loginWithApi'])->name('login.api')->middleware(['throttle:5,1', 'throttle:login-rut']);
 Route::post('/logout', [App\Http\Controllers\Auth\LoginController::class, 'logout'])->name('logout')->middleware('auth');
 
-// â”€â”€â”€ Rutas de solo lectura de AJAX (lookups compartidos entre mÃ³dulos) â”€â”€â”€â”€â”€â”€
+
 Route::middleware(['auth'])->group(function () {
     Route::get('/get-especies', [\App\Http\Controllers\PacController::class, 'getEspecies'])->name('get-especies');
     Route::get('/get-codigos',  [App\Http\Controllers\PacController::class,  'getCodigos'])->name('get-codigos');
+    Route::get('/get-presupuesto-sap', [\App\Http\Controllers\PacController::class, 'getPresupuestoSap'])->name('get-presupuesto-sap');
 });
 
-// â”€â”€â”€ Panel de bienvenida: cualquiera con el permiso del pie de pÃ¡gina â”€â”€â”€â”€â”€â”€â”€â”€
+
 Route::middleware(['auth'])->group(function () {
     Route::get('/admin', [App\Http\Controllers\AdminController::class, 'index'])->name('admin.index');
 });
 
-// â”€â”€â”€ ADMINISTRADOR: gestiÃ³n de usuarios del sistema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 Route::middleware(['auth', 'role:ADMINISTRADOR'])->group(function () {
     Route::get('/admin/usuarios',                 [App\Http\Controllers\UsuarioController::class, 'index'])->name('admin.usuarios.index');
     Route::get('/admin/usuarios/create',          [App\Http\Controllers\UsuarioController::class, 'create'])->name('admin.usuarios.create');
@@ -60,13 +61,52 @@ Route::middleware(['auth', 'permission:MENU BITACORA'])->group(function () {
     Route::get('/bitacora', [BitacoraController::class, 'index'])->name('bitacora.index');
 });
 
-// â”€â”€â”€ AUTENTIFICATIC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+Route::get('/debug-permisos', function () {
+    $configPermisos = [
+        'GRADOS DEL PERSONAL',
+        'DEPARTAMENTOS',
+        'ESPECIES O SERVICIOS',
+        'CLASIFICADOR',
+        'DESCRIPCION CLASIFICADOR',
+        'UNIDAD DE COMPRAS',
+        'ESTADO DEL REGISTRO',
+        'MODALIDAD DE COMPRA',
+        'ESTADO DE LICITACION',
+        'ESTADO DE COMPRAS',
+        'FUENTE DE FINANCIAMIENTO',
+    ];
+
+    $adminRole = \Spatie\Permission\Models\Role::where('name', 'ADMINISTRADOR')->first();
+
+    foreach ($configPermisos as $pName) {
+        $p = \Spatie\Permission\Models\Permission::firstOrCreate(
+            ['name' => $pName, 'guard_name' => 'web']
+        );
+        if ($adminRole && !$adminRole->hasPermissionTo($pName)) {
+            $adminRole->givePermissionTo($p);
+        }
+    }
+
+    app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+    return response()->json([
+        'status' => 'success',
+        'all_permissions' => \Spatie\Permission\Models\Permission::pluck('name'),
+    ]);
+});
+
+// AUTENTIFICATIC 
 Route::middleware(['auth', 'permission:MENU AUTENTIFICATIC'])->group(function () {
     Route::get('/Autenti/registerUser',  [App\Http\Controllers\Autenti\AutentiController::class, 'index'])->name('registerUser.form');
     Route::post('/Autenti/registerUser', [App\Http\Controllers\Autenti\AutentiController::class, 'store'])->name('registerUser.store');
+    Route::get('/Autenti/funcionarios',  [App\Http\Controllers\Autenti\AutentiController::class, 'listado'])->name('autenti.funcionarios');
+    Route::post('/Autenti/sync/{rut}',   [App\Http\Controllers\Autenti\AutentiController::class, 'syncFuncionario'])->name('autenti.sync');
+    Route::post('/Autenti/funcionario/{rut}/dotacion', [App\Http\Controllers\Autenti\AutentiController::class, 'updateDotacion'])->name('autenti.updateDotacion');
+    Route::delete('/Autenti/usuario/{rut}', [App\Http\Controllers\Autenti\AutentiController::class, 'eliminarUsuario'])->name('autenti.eliminarUsuario');
+    Route::post('/Autenti/eliminarUsuario',  [App\Http\Controllers\Autenti\AutentiController::class, 'eliminarUsuario'])->name('autenti.eliminarUsuario.post');
 });
 
-// â”€â”€â”€ PLAN ANUAL DE COMPRAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// PLAN ANUAL DE COMPRAS 
 Route::middleware(['auth', 'permission:MENU PLAN ANUAL DE COMPRAS'])->group(function () {
     Route::get('/pac', [App\Http\Controllers\PacController::class, 'index'])->name('pac.index');
 });
@@ -85,7 +125,7 @@ Route::middleware(['auth', 'permission:ELIMINAR PROYECTO'])->group(function () {
     Route::delete('/pac/{id}', [\App\Http\Controllers\PacController::class, 'destroy'])->name('destroy');
 });
 
-// â”€â”€â”€ LICITACIONES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//LICITACIONES
 Route::middleware(['auth', 'permission:MENU LICITACIONES'])->group(function () {
     Route::get('/modalidad', [\App\Http\Controllers\ModalidadController::class, 'index'])->name('modalidad.index');
 });
@@ -104,7 +144,7 @@ Route::middleware(['auth', 'permission:ELIMINAR LICITACION'])->group(function ()
     Route::delete('/modalidad/{id}', [\App\Http\Controllers\ModalidadController::class, 'destroy'])->name('modalidad.destroy');
 });
 
-// â”€â”€â”€ ORDENES DE COMPRA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//ORDENES DE COMPRA
 Route::middleware(['auth', 'permission:MENU ORDENES DE COMPRA'])->group(function () {
     Route::get('/ordenes', [\App\Http\Controllers\OrdenController::class, 'index'])->name('ordenes.index');
 });
@@ -117,58 +157,65 @@ Route::middleware(['auth', 'permission:INGRESAR ORDEN DE COMPRA'])->group(functi
 Route::middleware(['auth', 'permission:MODIFICAR ORDEN DE COMPRA'])->group(function () {
     Route::get('/ordenes/{id}/edit', [\App\Http\Controllers\OrdenController::class, 'edit'])->name('ordenes.edit');
     Route::put('/ordenes/{ordenes}', [\App\Http\Controllers\OrdenController::class, 'update'])->name('ordenes.update');
+    Route::post('/ordenes/{id}/pago-factura', [\App\Http\Controllers\OrdenController::class, 'guardarFacturaAjax'])->name('ordenes.guardarFacturaAjax');
+    Route::put('/ordenes/pago-factura/{id_pago}', [\App\Http\Controllers\OrdenController::class, 'actualizarFacturaAjax'])->name('ordenes.actualizarFacturaAjax');
+    Route::delete('/ordenes/pago-factura/{id_pago}', [\App\Http\Controllers\OrdenController::class, 'eliminarFacturaAjax'])->name('ordenes.eliminarFacturaAjax');
 });
 
 Route::middleware(['auth', 'permission:ELIMINAR LICITACION'])->group(function () {
     Route::delete('/ordenes/{id}', [\App\Http\Controllers\OrdenController::class, 'destroy'])->name('ordenes.destroy');
 });
 
-// â”€â”€â”€ PRESUPUESTO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//PRESUPUESTO
 Route::middleware(['auth', 'permission:MENU PRESUPUESTO'])->group(function () {
     Route::get('/presupuesto/check-duplicate', [\App\Http\Controllers\PresupuestoController::class, 'checkDuplicate'])->name('presupuesto.check-duplicate');
     Route::resource('/presupuesto', \App\Http\Controllers\PresupuestoController::class)->names('presupuesto');
 });
 
-// â”€â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//DASHBOARD
 Route::middleware(['auth', 'permission:MENU DASHBOARD'])->group(function () {
     Route::get('/dashboard', [App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
 });
 
-// â”€â”€â”€ REPORTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//REPORTES
 Route::middleware(['auth', 'permission:MENU REPORTES'])->group(function () {
     Route::get('/reporte',           [ReporteController::class,          'index'])->name('reporte.index');
     Route::get('/reporte/dashboard', [ReporteDashboardController::class, 'index'])->name('reporte.dashboard');
 });
 
 
-// â”€â”€â”€ CONFIGURACIÃ“N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-Route::middleware(['auth', 'permission:MENU CONFIGURACION'])->group(function () {
-    Route::resource('/grados',              \App\Http\Controllers\GradoController::class);
-    Route::resource('/departamentos',       \App\Http\Controllers\DepartamentoController::class);
-    Route::resource('/especies',            \App\Http\Controllers\EspecieController::class);
-    Route::resource('/estados',             \App\Http\Controllers\EstadoController::class);
-    Route::resource('/clasificador',        \App\Http\Controllers\ClasificadorController::class);
-    Route::resource('/unidadcompra',        \App\Http\Controllers\UnidadCompraController::class);
-    Route::resource('/codigos',             \App\Http\Controllers\CodigoController::class);
-    Route::resource('/tipodecompra',        \App\Http\Controllers\TipocompraController::class);
-    Route::resource('estados-modificacion', EstadoModificacionController::class);
-    Route::resource('fuentefinanciamiento', FuenteFinanciamientoController::class);
+//CONFIGURACION 
+Route::middleware(['auth'])->group(function () {
+    Route::resource('/grados',              \App\Http\Controllers\GradoController::class)->middleware('permission:MENU CONFIGURACION|GRADOS DEL PERSONAL');
+    Route::resource('/departamentos',       \App\Http\Controllers\DepartamentoController::class)->middleware('permission:MENU CONFIGURACION|DEPARTAMENTOS');
+    Route::resource('/especies',            \App\Http\Controllers\EspecieController::class)->middleware('permission:MENU CONFIGURACION|ESPECIES O SERVICIOS');
+    Route::resource('/estados',             \App\Http\Controllers\EstadoController::class)->middleware('permission:MENU CONFIGURACION|ESTADO DEL REGISTRO');
+    Route::resource('/clasificador',        \App\Http\Controllers\ClasificadorController::class)->middleware('permission:MENU CONFIGURACION|CLASIFICADOR');
+    Route::resource('/unidadcompra',        \App\Http\Controllers\UnidadCompraController::class)->middleware('permission:MENU CONFIGURACION|UNIDAD DE COMPRAS');
+    Route::resource('/codigos',             \App\Http\Controllers\CodigoController::class)->middleware('permission:MENU CONFIGURACION|DESCRIPCION CLASIFICADOR');
+    Route::resource('/tipodecompra',        \App\Http\Controllers\TipocompraController::class)->middleware('permission:MENU CONFIGURACION|MODALIDAD DE COMPRA');
+    Route::resource('estados-modificacion', EstadoModificacionController::class)->middleware('permission:MENU CONFIGURACION|ESTADO DEL REGISTRO');
+    Route::resource('fuentefinanciamiento', FuenteFinanciamientoController::class)->middleware('permission:MENU CONFIGURACION|FUENTE DE FINANCIAMIENTO');
 
-    Route::get('/estadolicitacion',                        [\App\Http\Controllers\EstadoLicitacionController::class, 'index'])->name('estadolicitacion.index');
-    Route::get('/estadolicitacion/create',                 [\App\Http\Controllers\EstadoLicitacionController::class, 'create'])->name('estadolicitacion.create');
-    Route::post('/estadolicitacion.store',                 [\App\Http\Controllers\EstadoLicitacionController::class, 'store'])->name('estadolicitacion.store');
-    Route::get('/estadolicitacion/{id}/edit',              [\App\Http\Controllers\EstadoLicitacionController::class, 'edit'])->name('estadolicitacion.edit');
-    Route::put('/estadolicitacion/{estadoLicitacion}',     [App\Http\Controllers\EstadoLicitacionController::class, 'update'])->name('estadolicitacion.update');
+    Route::middleware('permission:MENU CONFIGURACION|ESTADO DE LICITACION')->group(function () {
+        Route::get('/estadolicitacion',                        [\App\Http\Controllers\EstadoLicitacionController::class, 'index'])->name('estadolicitacion.index');
+        Route::get('/estadolicitacion/create',                 [\App\Http\Controllers\EstadoLicitacionController::class, 'create'])->name('estadolicitacion.create');
+        Route::post('/estadolicitacion.store',                 [\App\Http\Controllers\EstadoLicitacionController::class, 'store'])->name('estadolicitacion.store');
+        Route::get('/estadolicitacion/{id}/edit',              [\App\Http\Controllers\EstadoLicitacionController::class, 'edit'])->name('estadolicitacion.edit');
+        Route::put('/estadolicitacion/{estadoLicitacion}',     [App\Http\Controllers\EstadoLicitacionController::class, 'update'])->name('estadolicitacion.update');
+    });
 
-    Route::get('/estadocompras',                     [\App\Http\Controllers\EstadoCompraController::class, 'index'])->name('estadocompras.index');
-    Route::get('/estadocompras/create',              [\App\Http\Controllers\EstadoCompraController::class, 'create'])->name('estadocompras.create');
-    Route::post('/estadocompras.store',              [\App\Http\Controllers\EstadoCompraController::class, 'store'])->name('estadocompras.store');
-    Route::get('/estadocompras/{id}/edit',           [\App\Http\Controllers\EstadoCompraController::class, 'edit'])->name('estadocompras.edit');
-    Route::put('/estadocompras/{estadocom}',         [App\Http\Controllers\EstadoCompraController::class, 'update'])->name('estadocompras.update');
-    Route::delete('/estadocompras/{id}',             [\App\Http\Controllers\EstadoCompraController::class, 'destroy'])->name('estadocompras.destroy');
+    Route::middleware('permission:MENU CONFIGURACION|ESTADO DE COMPRAS')->group(function () {
+        Route::get('/estadocompras',                     [\App\Http\Controllers\EstadoCompraController::class, 'index'])->name('estadocompras.index');
+        Route::get('/estadocompras/create',              [\App\Http\Controllers\EstadoCompraController::class, 'create'])->name('estadocompras.create');
+        Route::post('/estadocompras.store',              [\App\Http\Controllers\EstadoCompraController::class, 'store'])->name('estadocompras.store');
+        Route::get('/estadocompras/{id}/edit',           [\App\Http\Controllers\EstadoCompraController::class, 'edit'])->name('estadocompras.edit');
+        Route::put('/estadocompras/{estadocom}',         [App\Http\Controllers\EstadoCompraController::class, 'update'])->name('estadocompras.update');
+        Route::delete('/estadocompras/{id}',             [\App\Http\Controllers\EstadoCompraController::class, 'destroy'])->name('estadocompras.destroy');
+    });
 });
 
-// â”€â”€â”€ FUNCIONARIOS (sin menÃº explÃ­cito â€” solo autenticaciÃ³n) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//FUNCIONARIOS
 Route::middleware(['auth', 'role:ADMINISTRADOR'])->group(function () {
     Route::resource('/funcionarios', \App\Http\Controllers\FuncionarioController::class)->names('funcionarios');
     Route::post('/funcionarios',     [App\Http\Controllers\FuncionarioController::class, 'store'])->name('funcionarios.store');

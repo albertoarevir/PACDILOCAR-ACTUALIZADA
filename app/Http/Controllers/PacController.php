@@ -25,10 +25,11 @@ class PacController extends Controller
     {
         $user     = auth()->user();
         $dotacion = $user->departamento_id;
+        $isAdmin  = $user->hasRole('ADMINISTRADOR') || (int) $dotacion === 7;
 
-        $query = Pac::with(['departamento', 'especie', 'estado', 'modalidades.ordenes', 'infoPresupuesto']);
+        $query = Pac::with(['departamento', 'especie', 'estado', 'modalidades.ordenes', 'ordenes.estadocompra', 'infoPresupuesto']);
 
-        if ($dotacion !== 7)                     { $query->where('departamento_id', $dotacion); }
+        if (!$isAdmin)                           { $query->where('departamento_id', $dotacion); }
         if ($request->filled('year'))            { $query->where('year', $request->year); }
         if ($request->filled('departamento_id')) { $query->where('departamento_id', $request->departamento_id); }
         if ($request->filled('clasificador')) {
@@ -42,10 +43,12 @@ class PacController extends Controller
         if ($request->filled('especie_id'))      { $query->where('especie_id', $request->especie_id); }
 
         $pacs                 = $query->orderBy('id', 'desc')->get();
-        $especies             = \App\Models\Especie::all();
+        $especies             = $isAdmin
+            ? \App\Models\Especie::all()
+            : \App\Models\Especie::where('departamento_id', $dotacion)->get();
         $modalidades          = \App\Models\Modalidad::all();
         $estados              = \App\Models\Estado::all();
-        $departamentos = $user->departamento_id === 7
+        $departamentos = $isAdmin
             ? \App\Models\Departamento::all()
             : \App\Models\Departamento::where('id', $user->departamento_id)->get();
         $estados_modificacion = \App\Models\EstadoModificacion::all();
@@ -66,6 +69,8 @@ class PacController extends Controller
                 $q->select('id')->from('pacs')
                     ->where('codigo', $pac->codigo)
                     ->where('departamento_id', $pac->departamento_id);
+            })->whereDoesntHave('estadocompra', function ($q) {
+                $q->whereRaw("LOWER(TRIM(detalle)) = 'orden de compra cancelada'");
             })->sum('monto');
             $pac->saldo_disponible = $montoSap - $pac->total_comprometido_item;
             return $pac;
@@ -79,13 +84,16 @@ class PacController extends Controller
 
     public function create()
     {
-        $user = auth()->user();
+        $user    = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
 
-        $departamentos = $user->departamento_id === 7
+        $departamentos = $isAdmin
             ? Departamento::all()
             : Departamento::where('id', $user->departamento_id)->get();
 
-        $especies             = Especie::all();
+        $especies             = $isAdmin
+            ? Especie::all()
+            : Especie::where('departamento_id', $user->departamento_id)->get();
         $codigos              = Codigo::all();
         $clasificadors        = Clasificador::all();
         $estados              = Estado::all();
@@ -116,8 +124,9 @@ class PacController extends Controller
             'fuente_financiamiento' => 'required|exists:fuente_financiamiento,id',
         ]);
 
-        $user = auth()->user();
-        if ($user->departamento_id !== 7 && (int) $request->departamento !== $user->departamento_id) {
+        $user    = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
+        if (!$isAdmin && (int) $request->departamento !== (int) $user->departamento_id) {
             abort(403, 'No tienes permiso para crear registros en otro departamento.');
         }
 
@@ -145,13 +154,14 @@ class PacController extends Controller
 
     public function edit($id)
     {
-        $pac  = Pac::findOrFail($id);
-        $user = auth()->user();
-        if ($user->departamento_id !== 7 && $pac->departamento_id !== $user->departamento_id) {
+        $pac     = Pac::findOrFail($id);
+        $user    = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
+        if (!$isAdmin && (int) $pac->departamento_id !== (int) $user->departamento_id) {
             abort(403, 'No tienes permiso para editar este registro.');
         }
 
-        $departamentos        = $user->departamento_id === 7
+        $departamentos        = $isAdmin
             ? Departamento::all()
             : Departamento::where('id', $user->departamento_id)->get();
         $especies             = Especie::where('departamento_id', $pac->departamento_id)->get();
@@ -184,9 +194,10 @@ class PacController extends Controller
             'fuente_financiamiento' => 'required',
         ]);
 
-        $pac  = Pac::findOrFail($id);
-        $user = auth()->user();
-        if ($user->departamento_id !== 7 && $pac->departamento_id !== $user->departamento_id) {
+        $pac     = Pac::findOrFail($id);
+        $user    = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
+        if (!$isAdmin && (int) $pac->departamento_id !== (int) $user->departamento_id) {
             abort(403, 'No tienes permiso para modificar este registro.');
         }
 
@@ -229,11 +240,79 @@ class PacController extends Controller
         return response()->json(Especie::where('departamento_id', $request->departamento)->get());
     }
 
+    public function getPresupuestoSap(Request $request)
+    {
+        $departamentoId = $request->departamento_id;
+        $codigo         = trim($request->codigo);
+        $year           = $request->year;
+
+        if (!$departamentoId || !$codigo) {
+            return response()->json([
+                'existe'                      => false,
+                'monto_sap'                   => 0,
+                'monto_sap_formateado'        => '$ 0',
+                'total_comprometido'          => 0,
+                'total_comprometido_formateado' => '$ 0',
+                'saldo_disponible'            => 0,
+                'saldo_disponible_formateado' => '$ 0',
+                'departamento_nombre'         => 'UNIDAD',
+                'updated_at'                  => null,
+            ]);
+        }
+
+        $query = \App\Models\Presupuesto::where(function ($q) use ($codigo) {
+            $q->where('item', $codigo)
+              ->orWhereRaw('TRIM(item) = ?', [$codigo]);
+        })->where('departamento_id', $departamentoId);
+
+        if ($year) {
+            $presupuesto = (clone $query)->where('year', $year)->first();
+            if (!$presupuesto) {
+                $presupuesto = $query->latest('year')->first();
+            }
+        } else {
+            $presupuesto = $query->first();
+        }
+
+        $montoSap = $presupuesto ? (float) $presupuesto->monto : 0;
+
+        $totalComprometido = (float) Orden::whereIn('id_proyecto', function ($q) use ($codigo, $departamentoId) {
+            $q->select('id')->from('pacs')
+                ->where(function ($sub) use ($codigo) {
+                    $sub->where('codigo', $codigo)
+                        ->orWhereRaw('TRIM(codigo) = ?', [$codigo]);
+                })
+                ->where('departamento_id', $departamentoId);
+        })->whereDoesntHave('estadocompra', function ($q) {
+            $q->whereRaw("LOWER(TRIM(detalle)) = 'orden de compra cancelada'");
+        })->sum('monto');
+
+        $saldoDisponible = $montoSap - $totalComprometido;
+
+        $departamento = Departamento::find($departamentoId);
+        $deptoNombre  = $departamento ? ($departamento->abreviatura ?? $departamento->detalle) : 'UNIDAD';
+
+        return response()->json([
+            'existe'                      => (bool) $presupuesto,
+            'monto_sap'                   => $montoSap,
+            'monto_sap_formateado'        => '$ ' . number_format($montoSap, 0, ',', '.'),
+            'total_comprometido'          => $totalComprometido,
+            'total_comprometido_formateado' => '$ ' . number_format($totalComprometido, 0, ',', '.'),
+            'saldo_disponible'            => $saldoDisponible,
+            'saldo_disponible_formateado' => '$ ' . number_format($saldoDisponible, 0, ',', '.'),
+            'departamento_nombre'         => $deptoNombre,
+            'updated_at'                  => ($presupuesto && $presupuesto->updated_at)
+                ? Carbon::parse($presupuesto->updated_at)->format('d-m-Y g:i a')
+                : null,
+        ]);
+    }
+
     public function destroy($id)
     {
-        $pac  = Pac::findOrFail($id);
-        $user = auth()->user();
-        if ($user->departamento_id !== 7 && $pac->departamento_id !== $user->departamento_id) {
+        $pac     = Pac::findOrFail($id);
+        $user    = auth()->user();
+        $isAdmin = $user->hasRole('ADMINISTRADOR') || (int) $user->departamento_id === 7;
+        if (!$isAdmin && (int) $pac->departamento_id !== (int) $user->departamento_id) {
             abort(403, 'No tienes permiso para eliminar este registro.');
         }
 

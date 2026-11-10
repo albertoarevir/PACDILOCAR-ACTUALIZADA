@@ -58,4 +58,9 @@ class Pac extends Model
     {
         return $this->belongsTo(\App\Models\Presupuesto::class, 'codigo', 'item');
     }
+
+    public function pagoFacturas()
+    {
+        return $this->hasMany(PagoFactura::class, 'id_proyecto');
+    }
 } // <-- Solo una llave aquí para cerrar la clase

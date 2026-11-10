@@ -57,4 +57,9 @@ class Orden extends Model
         // O más simplemente:
         // return $this->pac->departamento(); // Esto si ya cargaste 'pac'
     }
+
+    public function pagoFacturas()
+    {
+        return $this->hasMany(PagoFactura::class, 'id_orden_compra');
+    }
 }

@@ -55,6 +55,19 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'MENU AUTENTIFICATIC', 'guard_name' => 'web']);   
         Permission::create(['name' => 'MENU PRESUPUESTO', 'guard_name' => 'web']);
 
+        // Crear permisos para configuración
+        Permission::create(['name' => 'GRADOS DEL PERSONAL', 'guard_name' => 'web']);
+        Permission::create(['name' => 'DEPARTAMENTOS', 'guard_name' => 'web']);
+        Permission::create(['name' => 'ESPECIES O SERVICIOS', 'guard_name' => 'web']);
+        Permission::create(['name' => 'CLASIFICADOR', 'guard_name' => 'web']);
+        Permission::create(['name' => 'DESCRIPCION CLASIFICADOR', 'guard_name' => 'web']);
+        Permission::create(['name' => 'UNIDAD DE COMPRAS', 'guard_name' => 'web']);
+        Permission::create(['name' => 'ESTADO DEL REGISTRO', 'guard_name' => 'web']);
+        Permission::create(['name' => 'MODALIDAD DE COMPRA', 'guard_name' => 'web']);
+        Permission::create(['name' => 'ESTADO DE LICITACION', 'guard_name' => 'web']);
+        Permission::create(['name' => 'ESTADO DE COMPRAS', 'guard_name' => 'web']);
+        Permission::create(['name' => 'FUENTE DE FINANCIAMIENTO', 'guard_name' => 'web']);
+
 // Asignar permisos al rol ADMINISTRADOR
 $admin->givePermissionTo([
     'INGRESAR LICITACION',
@@ -79,6 +92,17 @@ $admin->givePermissionTo([
     'MENU BITACORA',
     'MENU AUTENTIFICATIC',
     'MENU PRESUPUESTO',
+    'GRADOS DEL PERSONAL',
+    'DEPARTAMENTOS',
+    'ESPECIES O SERVICIOS',
+    'CLASIFICADOR',
+    'DESCRIPCION CLASIFICADOR',
+    'UNIDAD DE COMPRAS',
+    'ESTADO DEL REGISTRO',
+    'MODALIDAD DE COMPRA',
+    'ESTADO DE LICITACION',
+    'ESTADO DE COMPRAS',
+    'FUENTE DE FINANCIAMIENTO',
 ]);
 }
 }
